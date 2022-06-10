@@ -173,9 +173,9 @@ fn scene(x: f64, y: f64) -> Result {
     let top_light = Result {
         sd: circle_sdf(x, x, -0.05, -0.05, 0.05),
         emissive: Color {
-            r: 6.0,
-            g: 6.0,
-            b: 6.0,
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
         },
         reflectivity: 0.0,
         eta: 0.0,
@@ -188,9 +188,9 @@ fn scene(x: f64, y: f64) -> Result {
     let bottom_light = Result {
         sd: circle_sdf(x, x, 1.05, 1.05, 0.05),
         emissive: Color {
-            r: 6.0,
-            g: 6.0,
-            b: 6.0,
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
         },
         reflectivity: 0.0,
         eta: 0.0,
