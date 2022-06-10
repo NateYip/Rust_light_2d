@@ -1,7 +1,7 @@
 use image::{ImageBuffer, Rgb};
 use rand::Rng;
 use std::f64::consts::PI;
-use std::time::{SystemTime};
+use std::time::SystemTime;
 /** 设置采样范围*/
 
 const WIDTH: u32 = 512;
@@ -80,10 +80,18 @@ fn subtract_op(a: Result, b: Result) -> Result {
 fn build_rsult(a: f64) -> Result {
     Result {
         sd: a,
-        emissive: Color { r: 0.0, g:0.0, b: 0.0 },
+        emissive: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
         reflectivity: 0.2,
         eta: 1.5,
-        absorption: Color { r: 4.0, g:4.0, b: 4.0 },
+        absorption: Color {
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
+        },
     }
 }
 fn scene(x: f64, y: f64) -> Result {
@@ -97,10 +105,18 @@ fn scene(x: f64, y: f64) -> Result {
     let y = (y - 0.5).abs() + 0.5;
     let light = Result {
         sd: circle_sdf(x, y, -0.05, -0.05, 0.05),
-        emissive: Color { r: 6.0, g:6.0, b: 6.0 },
+        emissive: Color {
+            r: 6.0,
+            g: 6.0,
+            b: 6.0,
+        },
         reflectivity: 0.0,
         eta: 0.0,
-        absorption: Color { r: 0.0, g:0.0, b: 0.0 },
+        absorption: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
     };
 
     let rs = union_op(
@@ -192,15 +208,14 @@ fn refract(ix: f64, iy: f64, nx: f64, ny: f64, eta: f64) -> (bool, f64, f64) {
 fn fresnel(cosi: f64, cost: f64, etai: f64, etat: f64) -> f64 {
     let rs = (etat * cosi - etai * cost) / (etat * cosi + etai * cost);
     let rp = (etai * cosi - etat * cost) / (etai * cosi + etat * cost);
-    let t = (rs * rs + rp * rp) * 0.5;
-    t
+    (rs * rs + rp * rp) * 0.5
 }
 //比尔-朗伯定律
-fn beer_lambert(a: Color, d: f64) -> Color  {
-    Color { 
-        r:(-a.r * d).exp(),
-        g:(-a.g*d ).exp(),
-        b:(-a.b * d ).exp(),
+fn beer_lambert(a: Color, d: f64) -> Color {
+    Color {
+        r: (-a.r * d).exp(),
+        g: (-a.g * d).exp(),
+        b: (-a.b * d).exp(),
     }
 }
 //反射求解
@@ -216,7 +231,7 @@ fn gradient(x: f64, y: f64) -> (f64, f64) {
     )
 }
 fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
-    let mut t: f64 = 0.0;
+    let mut t: f64 = 1e-3;
     //判断是否到达表面
     let sign = if scene(ox, oy).sd > 0.0 { 1.0 } else { -1.0 };
     for _i in 0..MAX_STEP {
@@ -225,14 +240,15 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
         let r = scene(x, y);
         if r.sd * sign < EPSILON {
             let mut sum = r.emissive;
-            if depth < MAX_DEPTH && (r.reflectivity > 0.0 || r.eta > 0.0) {
+            if depth < MAX_DEPTH && r.eta > 0.0 {
                 let mut refl = r.reflectivity;
-                let (mut nx, mut ny) = gradient(x, y);
-                nx *= sign;
-                ny *= sign;
+                let (nx, ny) = gradient(x, y);
+                let s = 1.0 / (nx * nx + ny * ny);
+                let nx = nx * sign * s;
+                let ny = ny * sign * s;
+                let refl_eta = if sign < 0.0 { r.eta } else { 1.0 / r.eta };
+                let (flag, rx, ry) = refract(dx, dy, nx, ny, refl_eta);
                 if r.eta > 0.0 {
-                    let refl_eta = if sign < 0.0 { r.eta } else { 1.0 / r.eta };
-                    let (flag, rx, ry) = refract(dx, dy, nx, ny, refl_eta);
                     if flag {
                         let cosi = -(dx * nx + dy * ny);
                         let cost = -(rx * nx + ry * ny);
@@ -241,29 +257,47 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
                         } else {
                             fresnel(cosi, cost, 1.0, r.eta)
                         };
-                        sum = color_add(sum, color_scale(trace(x - nx * BIAS, y - ny * BIAS, rx, ry, depth + 1), 1.0 - refl));
+                        refl = f64::max(f64::min(refl, 1.0), 0.0);
+                        sum = color_add(
+                            sum,
+                            color_scale(
+                                trace(x - nx * BIAS, y - ny * BIAS, rx, ry, depth + 1),
+                                1.0 - refl,
+                            ),
+                        );
                     } else {
                         refl = 1.0;
                     }
                 }
                 if refl > 0.0 {
                     let (rx, ry) = reflect(dx, dy, nx, ny);
-                    sum = color_add(sum, color_scale(trace(x + nx * BIAS, y + ny * BIAS, rx, ry, depth + 1), refl));
+                    sum = color_add(
+                        sum,
+                        color_scale(trace(x + nx * BIAS, y + ny * BIAS, rx, ry, depth + 1), refl),
+                    );
                 }
             }
             //采样点小于阈值，返回自发光强度
             return color_mul(sum, beer_lambert(r.absorption, t));
         }
-        t += r.sd;
+        t += r.sd * sign;
         if t > MAX_DISTANCE {
             break;
         }
     }
-    Color { r: 0.0, g:0.0, b: 0.0 }
+    Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    }
 }
 //运用蒙地卡罗积分实现64个方向均匀采样
 fn sample(x: f64, y: f64) -> Color {
-    let mut sum: Color =  Color { r: 0.0, g:0.0, b: 0.0 };
+    let mut sum: Color = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+    };
     for i in 0..N {
         //随机方向
         let tmp = 2.0 * PI * (i as f64 + rand::thread_rng().gen_range(0.0..1.0)) / N as f64;
@@ -285,7 +319,15 @@ fn main() {
             if y > HEIGHT {
                 continue;
             }
-            img.put_pixel(x, y, Rgb([f64::min(color.r* 255.0, 255.0) as u8, f64::min(color.g* 255.0, 255.0) as u8, f64::min(color.b* 255.0, 255.0) as u8]));
+            img.put_pixel(
+                x,
+                y,
+                Rgb([
+                    f64::min(color.r * 255.0, 255.0) as u8,
+                    f64::min(color.g * 255.0, 255.0) as u8,
+                    f64::min(color.b * 255.0, 255.0) as u8,
+                ]),
+            );
         }
     }
     let after = SystemTime::now();
