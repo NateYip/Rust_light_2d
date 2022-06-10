@@ -77,9 +77,26 @@ fn subtract_op(a: Result, b: Result) -> Result {
     r
 }
 //创建结构
-fn build_rsult(a: f64) -> Result {
-    Result {
-        sd: a,
+// fn build_rsult(a: f64) -> Result {
+//     Result {
+//         sd: a,
+//         emissive: Color {
+//             r: 0.0,
+//             g: 0.0,
+//             b: 0.0,
+//         },
+//         reflectivity: 0.2,
+//         eta: 1.5,
+//         absorption: Color {
+//             r: 4.0,
+//             g: 4.0,
+//             b: 4.0,
+//         },
+//     }
+// }
+fn scene(x: f64, y: f64) -> Result {
+    let align_line = Result {
+        sd: box_sdf(x, y, 0.4, 0.25, 2.0 * PI / 4.0, 0.05, 0.25),
         emissive: Color {
             r: 0.0,
             g: 0.0,
@@ -92,19 +109,84 @@ fn build_rsult(a: f64) -> Result {
             g: 4.0,
             b: 4.0,
         },
-    }
-}
-fn scene(x: f64, y: f64) -> Result {
-    let align_line = build_rsult(box_sdf(x, y, 0.4, 0.25, 2.0 * PI / 4.0, 0.05, 0.25));
-    let vertical_line = build_rsult(box_sdf(x, y, 0.46, 0.6, 2.0 * PI / 20.0, 0.05, 0.35));
-    let left_top_corner = build_rsult(box_sdf(x, y, 0.1, 0.3, 2.0 * PI / 20.0, 0.05, 0.36));
-    let bottom_corner = build_rsult(box_sdf(x, y, 0.4, 0.9, 2.0 * PI / 4.0, 0.05, 0.25));
-    let triangle_right_top = build_rsult(triangle_sdf(x, y, 0.55, 0.13, 0.5, 0.3, 0.9, 0.3));
-
-    let x = (x - 0.5).abs() + 0.5;
-    let y = (y - 0.5).abs() + 0.5;
-    let light = Result {
-        sd: circle_sdf(x, y, -0.05, -0.05, 0.05),
+    };
+    let vertical_line = Result {
+        sd: box_sdf(x, y, 0.46, 0.6, 2.0 * PI / 20.0, 0.05, 0.35),
+        emissive: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
+        reflectivity: 0.2,
+        eta: 1.5,
+        absorption: Color {
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
+        },
+    };
+    let left_top_corner = Result {
+        sd: box_sdf(x, y, 0.1, 0.3, 2.0 * PI / 20.0, 0.05, 0.36),
+        emissive: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
+        reflectivity: 0.2,
+        eta: 1.5,
+        absorption: Color {
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
+        },
+    };
+    let bottom_corner = Result {
+        sd: box_sdf(x, y, 0.4, 0.9, 2.0 * PI / 4.0, 0.05, 0.25),
+        emissive: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
+        reflectivity: 0.2,
+        eta: 1.5,
+        absorption: Color {
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
+        },
+    };
+    let triangle_right_top = Result {
+        sd: triangle_sdf(x, y, 0.55, 0.13, 0.5, 0.3, 0.9, 0.3),
+        emissive: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
+        reflectivity: 0.2,
+        eta: 1.5,
+        absorption: Color {
+            r: 4.0,
+            g: 4.0,
+            b: 4.0,
+        },
+    };
+    let top_light = Result {
+        sd: circle_sdf(x, x, -0.05, -0.05, 0.05),
+        emissive: Color {
+            r: 6.0,
+            g: 6.0,
+            b: 6.0,
+        },
+        reflectivity: 0.0,
+        eta: 0.0,
+        absorption: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
+    };
+    let bottom_light = Result {
+        sd: circle_sdf(x, x, 1.05, 1.05, 0.05),
         emissive: Color {
             r: 6.0,
             g: 6.0,
@@ -119,7 +201,7 @@ fn scene(x: f64, y: f64) -> Result {
         },
     };
 
-    let rs = union_op(
+    let rs = union_op(union_op(
         subtract_op(
             subtract_op(
                 union_op(union_op(vertical_line, triangle_right_top), align_line),
@@ -127,8 +209,8 @@ fn scene(x: f64, y: f64) -> Result {
             ),
             bottom_corner,
         ),
-        light,
-    );
+        top_light,
+    ),bottom_light);
     rs
 }
 //矩形sdf
@@ -240,6 +322,7 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
         let r = scene(x, y);
         if r.sd * sign < EPSILON {
             let mut sum = r.emissive;
+
             if depth < MAX_DEPTH && r.eta > 0.0 {
                 let mut refl = r.reflectivity;
                 let (nx, ny) = gradient(x, y);
@@ -277,6 +360,7 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
                     );
                 }
             }
+            // let white = Color {r:255.0, g:255.0, b:255.0};
             //采样点小于阈值，返回自发光强度
             return color_mul(sum, beer_lambert(r.absorption, t));
         }
@@ -285,11 +369,11 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
             break;
         }
     }
-    Color {
+    return Color {
         r: 0.0,
         g: 0.0,
         b: 0.0,
-    }
+    };
 }
 //运用蒙地卡罗积分实现64个方向均匀采样
 fn sample(x: f64, y: f64) -> Color {
@@ -313,12 +397,6 @@ fn main() {
             let xx = x as f64 / WIDTH as f64;
             let yy = y as f64 / HEIGHT as f64;
             let color = sample(xx, yy);
-            if x > WIDTH {
-                continue;
-            }
-            if y > HEIGHT {
-                continue;
-            }
             img.put_pixel(
                 x,
                 y,
