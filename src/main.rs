@@ -1,7 +1,6 @@
 use image::{ImageBuffer, Rgb};
 use rand::Rng;
 use std::f64::consts::PI;
-use std::time::SystemTime;
 /** 设置采样范围*/
 
 const WIDTH: u32 = 512;
@@ -96,7 +95,7 @@ fn subtract_op(a: Result, b: Result) -> Result {
 // }
 fn scene(x: f64, y: f64) -> Result {
     let align_line = Result {
-        sd: box_sdf(x, y, 0.4, 0.25, 2.0 * PI / 4.0, 0.05, 0.25),
+        sd: box_sdf(x, y, 0.5, 0.25, 2.0 * PI / 4.0, 0.05, 0.4),
         emissive: Color {
             r: 0.0,
             g: 0.0,
@@ -107,11 +106,11 @@ fn scene(x: f64, y: f64) -> Result {
         absorption: Color {
             r: 4.0,
             g: 4.0,
-            b: 4.0,
+            b: 1.0,
         },
     };
     let vertical_line = Result {
-        sd: box_sdf(x, y, 0.46, 0.6, 2.0 * PI / 20.0, 0.05, 0.35),
+        sd: box_sdf(x, y, 0.43, 0.6, 2.0 * PI / 20.0, 0.05, 0.35),
         emissive: Color {
             r: 0.0,
             g: 0.0,
@@ -122,11 +121,11 @@ fn scene(x: f64, y: f64) -> Result {
         absorption: Color {
             r: 4.0,
             g: 4.0,
-            b: 4.0,
+            b: 1.0,
         },
     };
     let left_top_corner = Result {
-        sd: box_sdf(x, y, 0.1, 0.3, 2.0 * PI / 20.0, 0.05, 0.36),
+        sd: box_sdf(x, y, 0.05, 0.3, 2.0 * PI / 20.0, 0.05, 0.36),
         emissive: Color {
             r: 0.0,
             g: 0.0,
@@ -137,7 +136,22 @@ fn scene(x: f64, y: f64) -> Result {
         absorption: Color {
             r: 4.0,
             g: 4.0,
-            b: 4.0,
+            b: 1.0,
+        },
+    };
+    let right_top_corner = Result {
+        sd: box_sdf(x, y, 0.9, 0.3, 2.0 * PI / 20.0, 0.05, 0.36),
+        emissive: Color {
+            r: 0.0,
+            g: 0.0,
+            b: 0.0,
+        },
+        reflectivity: 0.2,
+        eta: 1.5,
+        absorption: Color {
+            r: 4.0,
+            g: 4.0,
+            b: 1.0,
         },
     };
     let bottom_corner = Result {
@@ -152,30 +166,15 @@ fn scene(x: f64, y: f64) -> Result {
         absorption: Color {
             r: 4.0,
             g: 4.0,
-            b: 4.0,
-        },
-    };
-    let triangle_right_top = Result {
-        sd: triangle_sdf(x, y, 0.55, 0.13, 0.5, 0.3, 0.9, 0.3),
-        emissive: Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-        },
-        reflectivity: 0.2,
-        eta: 1.5,
-        absorption: Color {
-            r: 4.0,
-            g: 4.0,
-            b: 4.0,
+            b: 1.0,
         },
     };
     let top_light = Result {
         sd: circle_sdf(x, x, -0.05, -0.05, 0.05),
         emissive: Color {
-            r: 4.0,
-            g: 4.0,
-            b: 4.0,
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
         },
         reflectivity: 0.0,
         eta: 0.0,
@@ -185,32 +184,11 @@ fn scene(x: f64, y: f64) -> Result {
             b: 0.0,
         },
     };
-    let bottom_light = Result {
-        sd: circle_sdf(x, x, 1.05, 1.05, 0.05),
-        emissive: Color {
-            r: 4.0,
-            g: 4.0,
-            b: 4.0,
-        },
-        reflectivity: 0.0,
-        eta: 0.0,
-        absorption: Color {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-        },
-    };
-
-    let rs = union_op(union_op(
-        subtract_op(
-            subtract_op(
-                union_op(union_op(vertical_line, triangle_right_top), align_line),
-                left_top_corner,
-            ),
-            bottom_corner,
-        ),
-        top_light,
-    ),bottom_light);
+    
+    let part_1 = subtract_op(vertical_line , bottom_corner);
+    let part_2 = subtract_op(align_line ,left_top_corner);
+    let t = subtract_op(union_op(part_2 ,part_1 ) ,right_top_corner);
+    let rs = union_op(top_light , t);
     rs
 }
 //矩形sdf
@@ -322,7 +300,6 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
         let r = scene(x, y);
         if r.sd * sign < EPSILON {
             let mut sum = r.emissive;
-
             if depth < MAX_DEPTH && r.eta > 0.0 {
                 let mut refl = r.reflectivity;
                 let (nx, ny) = gradient(x, y);
@@ -330,8 +307,8 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
                 let nx = nx * sign * s;
                 let ny = ny * sign * s;
                 let refl_eta = if sign < 0.0 { r.eta } else { 1.0 / r.eta };
-                let (flag, rx, ry) = refract(dx, dy, nx, ny, refl_eta);
                 if r.eta > 0.0 {
+                    let (flag, rx, ry) = refract(dx, dy, nx, ny, refl_eta);
                     if flag {
                         let cosi = -(dx * nx + dy * ny);
                         let cost = -(rx * nx + ry * ny);
@@ -364,7 +341,7 @@ fn trace(ox: f64, oy: f64, dx: f64, dy: f64, depth: u32) -> Color {
             //采样点小于阈值，返回自发光强度
             return color_mul(sum, beer_lambert(r.absorption, t));
         }
-        t += r.sd * sign;
+        t =t + r.sd * sign;
         if t > MAX_DISTANCE {
             break;
         }
@@ -397,6 +374,15 @@ fn main() {
             let xx = x as f64 / WIDTH as f64;
             let yy = y as f64 / HEIGHT as f64;
             let color = sample(xx, yy);
+            // println!(
+            //     "{:?}",
+            //     [
+            //         f64::min(color.r * 255.0, 255.0) as u8,
+            //         f64::min(color.g * 255.0, 255.0) as u8,
+            //         f64::min(color.b * 255.0, 255.0) as u8,
+            //     ]
+            // );
+            // println!("{:?}",color);
             img.put_pixel(
                 x,
                 y,
@@ -408,7 +394,5 @@ fn main() {
             );
         }
     }
-    let after = SystemTime::now();
-    println!("{:?}", after);
     img.save("out.png").unwrap();
 }
